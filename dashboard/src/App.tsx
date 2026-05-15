@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -152,10 +152,12 @@ function App() {
       <main>
         <div className="map-container premium-card">
           {latestPing ? (
-            <MapContainer center={center} zoom={15} zoomControl={false}>
+            <MapContainer {...({ center, zoom: 15, zoomControl: false } as any)}>
               <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                {...({
+                  url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                } as any)}
               />
               <ChangeView center={center} />
               <Marker position={center}>
