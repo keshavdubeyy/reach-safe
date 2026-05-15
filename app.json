@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "safety-app",
-    "slug": "safety-app",
+    "name": "ReachSafe",
+    "slug": "reachsafe",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
