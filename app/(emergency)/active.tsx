@@ -9,6 +9,7 @@ import { useEmergency } from '../../services/emergencyStore';
 import { useContacts } from '../../services/contactStore';
 import { generateEmergencyMessage } from '../../services/emergencyMessage';
 import { Radius } from '../../constants/radius';
+import * as NotificationService from '../../services/notification';
 
 export default function EmergencyActiveScreen() {
   const router = useRouter();
@@ -33,6 +34,17 @@ export default function EmergencyActiveScreen() {
     } catch (error) {
       Alert.alert('Error', 'Could not open dialer. Please call 112 manually.');
     }
+  };
+
+  const handleWhatsAppSOS = async () => {
+    if (sosContacts.length === 0) {
+      Alert.alert('No SOS Contacts', 'Please add SOS contacts to use this feature.');
+      return;
+    }
+
+    // Pick the primary (first) SOS contact
+    const contact = sosContacts[0];
+    await NotificationService.sendWhatsAppMessage(contact.phoneNumber, messagePreview);
   };
 
   const handleImSafe = () => {
@@ -134,8 +146,15 @@ export default function EmergencyActiveScreen() {
             <Text style={[styles.callButtonText, { color: colors.white }]}>Call 112</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity 
+            style={[styles.whatsappButton, { backgroundColor: '#25D366' }]} 
+            onPress={handleWhatsAppSOS}
+          >
+            <Text style={[styles.whatsappButtonText, { color: colors.white }]}>Alert via WhatsApp</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={[styles.safeButton, { borderColor: colors.border }]} onPress={handleImSafe}>
-            <Text style={[styles.safeButtonText, { color: colors.text }]}>I'm safe now</Text>
+            <Text style={[styles.safeButtonText, { color: colors.text }]}>I{"'"}m safe now</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -237,6 +256,20 @@ const styles = StyleSheet.create({
   },
   callButtonText: {
     fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+  },
+  whatsappButton: {
+    paddingVertical: Spacing.lg,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  whatsappButtonText: {
+    fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.bold,
   },
   safeButton: {

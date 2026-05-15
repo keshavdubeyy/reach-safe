@@ -7,14 +7,27 @@ import { Spacing } from '../../constants/spacing';
 import { Typography } from '../../constants/typography';
 import { useThemeColor } from '../../hooks/use-theme-color';
 import { useCommute } from '../../services/commuteStore';
+import { useEmergency } from '../../services/emergencyStore';
 import * as LocationService from '../../services/location';
 import { Radius } from '../../constants/radius';
+import * as NotificationService from '../../services/notification';
+import { useContacts } from '../../services/contactStore';
+import { MapPreview } from '../../components/MapPreview';
 
 export default function ActiveCommuteScreen() {
   const router = useRouter();
   const { activeSession, updateLocation, endCommute } = useCommute();
+  const { startCountdown } = useEmergency();
+  const { contacts } = useContacts();
   const colors = useThemeColor();
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [address, setAddress] = useState<string | null>(null);
+
+  const fetchLocation = React.useCallback(async () => {
+    const location = await LocationService.getCurrentLocation();
+    if (location) {
+      updateLocation(location);
+    }
+  }, [updateLocation]);
 
   useEffect(() => {
     if (!activeSession) {
@@ -22,36 +35,30 @@ export default function ActiveCommuteScreen() {
       return;
     }
 
-    // Initial update
     fetchLocation();
-
-    // Set up interval for every 30 seconds
-    const intervalId = setInterval(() => {
-      fetchLocation();
-    }, 30000);
-
+    const intervalId = setInterval(fetchLocation, 30000);
     return () => clearInterval(intervalId);
-  }, [activeSession]);
+  }, [activeSession, fetchLocation, router]);
 
-  const fetchLocation = async () => {
-    setIsUpdating(true);
-    const location = await LocationService.getCurrentLocation();
-    if (location) {
-      updateLocation(location);
+  useEffect(() => {
+    if (activeSession?.latestLocation) {
+      LocationService.getAddressFromCoords(
+        activeSession.latestLocation.latitude,
+        activeSession.latestLocation.longitude
+      ).then(setAddress);
     }
-    setIsUpdating(false);
-  };
+  }, [activeSession?.latestLocation]);
 
   const handleReachedSafely = () => {
     Alert.alert(
       'Reached Safely?',
-      'This will end your commute session and stop location sharing.',
+      'This will notify your watchers and end the session.',
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Yes, I\'m safe', 
-          onPress: () => {
-            endCommute();
+          onPress: async () => {
+            await endCommute();
             router.replace('/');
           } 
         }
@@ -59,85 +66,116 @@ export default function ActiveCommuteScreen() {
     );
   };
 
+  const handleNotifyWatchers = async () => {
+    if (!activeSession) return;
+
+    const etaStr = new Date(activeSession.expectedArrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    const message = NotificationService.generateCommuteMessage(
+      activeSession.routeName,
+      etaStr,
+      activeSession.id
+    );
+
+    // Get the first selected contact for WhatsApp (in a real app, you might loop or pick primary)
+    const firstContactId = activeSession.selectedTrustedContacts[0];
+    const contact = contacts.find(c => c.id === firstContactId || c.name === firstContactId);
+
+    if (contact) {
+      await NotificationService.sendWhatsAppMessage(contact.phoneNumber, message);
+    } else {
+      Alert.alert('No Contacts', 'No selected contacts found to notify.');
+    }
+  };
+
   const handleSOS = () => {
-    console.log('SOS triggered from Active Commute');
-    Alert.alert('SOS Triggered', 'Contacting trusted contacts (Simulated)');
+    startCountdown();
+    router.push('/(emergency)/countdown');
   };
 
   if (!activeSession) return null;
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View style={styles.statusBadge}>
-            <View style={styles.pulseDot} />
-            <Text style={[styles.statusText, { color: colors.primary }]}>On commute</Text>
-          </View>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.push('/')}>
+          <Text style={[styles.backText, { color: colors.primary }]}>Go Home</Text>
+        </TouchableOpacity>
+        <View style={styles.statusBadge}>
+          <View style={styles.pulseDot} />
+          <Text style={[styles.statusText, { color: colors.primary }]}>Commuting</Text>
         </View>
+        <View style={{ width: 60 }} />
+      </View>
 
-        <Text style={[styles.sharingNote, { color: colors.textSecondary }]}>
-          Location is updating locally on this device every 30s. Live sharing with contacts is not active in this prototype.
-        </Text>
-
-        <View style={[styles.card, { backgroundColor: colors.card, shadowColor: colors.text }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Route</Text>
-          <Text style={[styles.value, { color: colors.text }]}>{activeSession.routeName}</Text>
-          
-          <View style={styles.divider} />
-          
-          <View style={styles.row}>
-            <View>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>ETA</Text>
-              <Text style={[styles.value, { color: colors.text }]}>
-                {new Date(activeSession.expectedArrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </View>
-            <View>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Transport</Text>
-              <Text style={[styles.value, { color: colors.text }]}>{activeSession.transportMode}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: colors.card, shadowColor: colors.text }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Live Location (Local)</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <View style={styles.mapContainer}>
           {activeSession.latestLocation ? (
-            <View style={styles.locationGrid}>
-              <View style={styles.locationItem}>
-                <Text style={[styles.locLabel, { color: colors.textSecondary }]}>Lat</Text>
-                <Text style={[styles.locValue, { color: colors.text }]}>{activeSession.latestLocation.latitude.toFixed(5)}</Text>
-              </View>
-              <View style={styles.locationItem}>
-                <Text style={[styles.locLabel, { color: colors.textSecondary }]}>Long</Text>
-                <Text style={[styles.locValue, { color: colors.text }]}>{activeSession.latestLocation.longitude.toFixed(5)}</Text>
-              </View>
-              <View style={styles.locationItem}>
-                <Text style={[styles.locLabel, { color: colors.textSecondary }]}>Acc</Text>
-                <Text style={[styles.locValue, { color: colors.text }]}>{activeSession.latestLocation.accuracy?.toFixed(0)}m</Text>
-              </View>
-            </View>
+            <MapPreview 
+              latitude={activeSession.latestLocation.latitude} 
+              longitude={activeSession.latestLocation.longitude} 
+              height={250}
+            />
           ) : (
-            <Text style={[styles.locValue, { color: colors.textSecondary }]}>Fetching location...</Text>
+            <View style={[styles.mapPlaceholder, { backgroundColor: colors.card }]}>
+              <Text style={{ color: colors.textSecondary }}>Waiting for location...</Text>
+            </View>
           )}
           
-          <View style={styles.updateStatus}>
-            {isUpdating && <Text style={[styles.updatingText, { color: colors.primary }]}>Updating...</Text>}
-            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-              Last update: {activeSession.lastUpdatedAt ? new Date(activeSession.lastUpdatedAt).toLocaleTimeString() : 'Never'}
+          <View style={[styles.addressOverlay, { backgroundColor: colors.card }]}>
+            <Text style={[styles.addressTitle, { color: colors.textSecondary }]}>Current Position</Text>
+            <Text style={[styles.addressText, { color: colors.text }]} numberOfLines={2}>
+              {address || 'Fetching address...'}
             </Text>
           </View>
         </View>
 
-        <View style={[styles.card, { backgroundColor: colors.card, shadowColor: colors.text }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Watchers</Text>
-          <Text style={[styles.value, { color: colors.text }]}>
-            {activeSession.selectedTrustedContacts.join(', ')}
-          </Text>
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <View style={styles.routeHeader}>
+            <View style={styles.routePoint}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>From</Text>
+              <Text style={[styles.value, { color: colors.text }]}>{activeSession.from}</Text>
+            </View>
+            <View style={styles.arrowContainer}>
+              <Text style={{ color: colors.primary }}>→</Text>
+            </View>
+            <View style={styles.routePoint}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>To</Text>
+              <Text style={[styles.value, { color: colors.text }]}>{activeSession.to}</Text>
+            </View>
+          </View>
+          
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          
+          <View style={styles.row}>
+            <View>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Transport</Text>
+              <Text style={[styles.value, { color: colors.text }]}>{activeSession.transportMode}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Est. Arrival</Text>
+              <Text style={[styles.value, { color: colors.text }]}>
+                {new Date(activeSession.expectedArrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.actions}>
-          <PrimaryButton title="I reached safely" onPress={handleReachedSafely} />
+        <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Sharing with</Text>
+          <Text style={[styles.value, { color: colors.text }]}>
+            {activeSession.selectedTrustedContacts.length} trusted contacts notified
+          </Text>
+          <TouchableOpacity 
+            style={[styles.notifyButton, { borderColor: colors.primary }]}
+            onPress={handleNotifyWatchers}
+          >
+            <Text style={[styles.notifyButtonText, { color: colors.primary }]}>NOTIFY NOW VIA WHATSAPP</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
+          <PrimaryButton title="I Reached Safely" onPress={handleReachedSafely} />
           <TouchableOpacity style={styles.sosButton} onPress={handleSOS}>
             <Text style={styles.sosText}>SOS</Text>
           </TouchableOpacity>
@@ -149,116 +187,132 @@ export default function ActiveCommuteScreen() {
 
 const styles = StyleSheet.create({
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Spacing.md,
     marginBottom: Spacing.lg,
+  },
+  backText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
+    width: 80,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#007AFF15',
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
+    paddingVertical: 4,
     borderRadius: Radius.full,
   },
   pulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#007AFF',
-    marginRight: Spacing.sm,
+    marginRight: Spacing.xs,
   },
   statusText: {
-    fontSize: Typography.fontSize.sm,
+    fontSize: 10,
     fontWeight: Typography.fontWeight.bold,
     textTransform: 'uppercase',
   },
-  sharingNote: {
-    fontSize: Typography.fontSize.sm,
-    textAlign: 'center',
+  content: {
+    paddingBottom: Spacing.xxxl,
+  },
+  mapContainer: {
     marginBottom: Spacing.xl,
-    paddingHorizontal: Spacing.lg,
-    fontStyle: 'italic',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  mapPlaceholder: {
+    height: 250,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addressOverlay: {
+    position: 'absolute',
+    bottom: Spacing.md,
+    left: Spacing.md,
+    right: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  addressTitle: {
+    fontSize: 10,
+    fontWeight: Typography.fontWeight.bold,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  addressText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semibold,
   },
   card: {
     padding: Spacing.lg,
     borderRadius: Radius.lg,
     marginBottom: Spacing.md,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+  },
+  routeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  routePoint: {
+    flex: 1,
+  },
+  arrowContainer: {
+    paddingHorizontal: Spacing.md,
   },
   label: {
     fontSize: Typography.fontSize.xs,
     fontWeight: Typography.fontWeight.bold,
     textTransform: 'uppercase',
-    marginBottom: Spacing.sm,
+    marginBottom: 4,
   },
   value: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.semibold,
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.bold,
   },
   divider: {
     height: 1,
-    backgroundColor: '#00000010',
     marginVertical: Spacing.md,
+    opacity: 0.1,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  locationGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#00000005',
-    padding: Spacing.md,
+  footer: {
+    paddingVertical: Spacing.xl,
+    gap: Spacing.md,
+  },
+  notifyButton: {
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderRadius: Radius.md,
-  },
-  locationItem: {
+    borderWidth: 1,
     alignItems: 'center',
+    borderStyle: 'dashed',
   },
-  locLabel: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.medium,
-    marginBottom: 2,
-  },
-  locValue: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.bold,
-  },
-  updateStatus: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.sm,
-  },
-  updatingText: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.bold,
-  },
-  timestamp: {
-    fontSize: Typography.fontSize.xs,
-    fontStyle: 'italic',
-    flex: 1,
-    textAlign: 'right',
-  },
-  actions: {
-    marginTop: Spacing.xl,
-    marginBottom: Spacing.xxl,
+  notifyButtonText: {
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   sosButton: {
-    backgroundColor: '#FF3B3015',
+    backgroundColor: '#FF3B30',
     paddingVertical: Spacing.md,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#FF3B30',
-    marginTop: Spacing.sm,
   },
   sosText: {
-    color: '#FF3B30',
+    color: '#FFF',
     fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.bold,
   },

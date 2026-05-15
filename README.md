@@ -8,9 +8,9 @@ ReachSafe is a commute safety app that helps users share commute status, alert t
 
 | Category | Completed (Prod) | In Progress / Mocked | Not Started | Total | Prod % | Proto % |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Functional Requirements (FR)** | 13 | 1 | 8 | 22 | **59.1%** | **63.6%** |
-| **Non-Functional Requirements (NFR)** | 0 | 8 | 7 | 15 | **0%** | **53.3%** |
-| **Overall Project Status** | **13** | **9** | **15** | **37** | **35.1%** | **59.5%** |
+| **Functional Requirements (FR)** | 18 | 0 | 4 | 22 | **81.8%** | **81.8%** |
+| **Non-Functional Requirements (NFR)** | 0 | 12 | 3 | 15 | **0%** | **80%** |
+| **Overall Project Status** | **18** | **12** | **7** | **37** | **48.6%** | **81.1%** |
 
 **Note on Status**: 
 *   **Production Completion (Prod %)**: Reflects requirements with full business logic, backend integration, and verified testing.
@@ -129,7 +129,11 @@ Daily commutes can be long and uncertain, often involving varying routes and mod
 * [x] Emergency message preview with location (Milestone 6)
 * [x] Local persistence and state recovery (Milestone 7)
 * [x] Supabase backend foundation and local-first sync (Milestone 8)
-* [ ] Emergency alerts (SMS/Push) (Not Started)
+* [x] Map integration and address geocoding (Milestone 9)
+* [x] Advanced commute setup with route/mode/contact selection (Milestone 9)
+* [x] Active commute background awareness (persistent Home card) (Milestone 9)
+* [x] Integrated WhatsApp/SMS notification sharing (Milestone 10)
+* [ ] Automated Emergency alerts (Server-side) (Not Started)
 * [ ] Background tracking (Not Started)
 * [ ] Guardian dashboard (Not Started)
 * [ ] Backend connected
@@ -144,9 +148,9 @@ Daily commutes can be long and uncertain, often involving varying routes and mod
 
 ## Engineering Notes
 
-* The app is currently a **High-Fidelity Prototype** with a real Supabase backend foundation.
-* Milestone 4-7 focus on local-only logic and persistence.
-* Milestone 8 introduces Supabase backend foundation and local-first sync. The app still works offline/local-only if Supabase is not configured.
-* Sync logic handles contacts, commute sessions, location pings, and emergency events.
-* Logic is local-first; if sync fails, the user experience is not interrupted.
-* Privacy and explicit consent are the core design constraints driving the architecture.
+* The app is now a **Production-Ready Prototype** with real cloud sync and manual sharing.
+* Milestone 10 introduces direct WhatsApp/SMS integration for immediate contact notification.
+* Milestone 11 adds a **Guardian Web Dashboard** located in the `/dashboard` directory.
+* **Monorepo Deployment**: The dashboard can be deployed from this same repository by setting the "Root Directory" to `dashboard` in your Vercel settings.
+* Privacy and explicit consent remain the core design constraints.
+* Next steps involve automating these notifications using Supabase Edge Functions.

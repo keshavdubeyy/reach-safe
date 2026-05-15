@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, SafeAreaView, ViewStyle } from 'react-native';
+import { StyleSheet, View, ViewStyle } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Spacing } from '../constants/spacing';
 import { useThemeColor } from '../hooks/use-theme-color';

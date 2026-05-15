@@ -15,6 +15,12 @@ export default function SOSCountdownScreen() {
   const colors = useThemeColor();
   const [timeLeft, setTimeLeft] = useState(5);
 
+  const triggerEmergency = React.useCallback(async () => {
+    const location = await LocationService.getCurrentLocation();
+    activateEmergency(location);
+    router.replace('/(emergency)/active');
+  }, [activateEmergency, router]);
+
   useEffect(() => {
     if (emergency.status !== 'countdown') {
       router.replace('/');
@@ -33,13 +39,7 @@ export default function SOSCountdownScreen() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
-
-  const triggerEmergency = async () => {
-    const location = await LocationService.getCurrentLocation();
-    activateEmergency(location);
-    router.replace('/(emergency)/active');
-  };
+  }, [emergency.status, router, triggerEmergency]);
 
   const handleCancel = () => {
     resetEmergency();
